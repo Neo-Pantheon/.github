@@ -430,8 +430,8 @@ The NEOX token is central to the Neo Pantheon ecosystem:
 ```
 ┌───────────────┐            ┌───────────────┐             ┌───────────────┐
 │               │            │               │             │               │
-│  NEOX Token   │◄──────────►│ AgentRegistry │◄────────────►│   AgentNFT    │
-│  (ERC20)      │            │ (Management)  │             │   (ERC721)     │
+│  NEOX Token   │◄──────────►│ AgentRegistry │◄───────────►│   AgentNFT    │
+│  (ERC20)      │            │ (Management)  │             │   (ERC721)    │
 │               │            │               │             │               │
 └───────────────┘            └───────────────┘             └───────────────┘
         ▲                            ▲                             ▲
@@ -440,7 +440,7 @@ The NEOX token is central to the Neo Pantheon ecosystem:
         ▼                            ▼                             ▼
 ┌───────────────┐            ┌───────────────┐             ┌───────────────┐
 │               │            │               │             │               │
-│    Creator    │◄──────────►│     User      │◄────────────►│  NFT Holder   │
+│    Creator    │◄──────────►│     User      │◄───────────►│  NFT Holder   │
 │               │            │               │             │               │
 └───────────────┘            └───────────────┘             └───────────────┘
 ```
