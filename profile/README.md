@@ -18,14 +18,19 @@ Neo Pantheon is a decentralized protocol for creating, sharing, and monetizing A
 - [Technical Implementation](#technical-implementation)
 - [Fee Structure](#fee-structure)
 - [Revenue Distribution](#revenue-distribution)
+- [Marketplace](#marketplace)
+- [Roadmap](#roadmap)
+- [Conclusion](#conclusion)
+- [License](#license)
 
 ## Architecture
 
-Neo Pantheon consists of three core smart contracts:
+Neo Pantheon consists of four core smart contracts:
 
 1. **NEOX Token**: The platform's native ERC20 token used for all transactions
 2. **AgentNFT**: ERC721 tokens representing ownership of AI agents
 3. **AgentRegistry**: Central registry for agent creation, management and usage
+4. **NPMarketplace**: Decentralized marketplace for buying and selling Agent NFTs
 
 These contracts work together to create a complete ecosystem for AI agent creation, ownership, and monetization.
 
@@ -47,13 +52,15 @@ contract NEOX is ERC20, Ownable {
 
 ### AgentNFT Contract
 
-The AgentNFT contract represents ownership of AI agents as NFTs. Each agent can have multiple NFT copies (up to 12), with revenue being distributed equally among all NFT holders of a particular agent.
+The AgentNFT contract represents ownership of AI agents as NFTs. Each agent has exactly 12 NFT copies, with revenue being distributed equally among all NFT holders of a particular agent.
 
 Key features:
 - ERC721 token with enumeration support
+- Access control for role-based permissions
 - Tracks agent metadata and usage
 - Manages revenue distribution and claims
 - Custom token URI support for marketplaces and applications
+- Security protection with reentrancy guards
 
 #### Core Functions
 
@@ -66,8 +73,11 @@ Key features:
    - Called automatically when fees are collected
    - Splits revenue equally among all NFT tokens of an agent
    - Updates unclaimedRevenue for each token
+   - Handles remainder tokens when division isn't even
    
 3. **claimRevenue**: Allows NFT owners to claim their accumulated revenue
+   - Uses SafeERC20 for secure token transfers
+   - Protected against reentrancy attacks
    - Transfers NEOX tokens directly to the owner's wallet
    - Resets unclaimedRevenue and updates totalRevenueClaimed
    - Can only be called by the token owner
@@ -76,13 +86,12 @@ Key features:
    - Updates totalUsageCount for analytics
    - Emits events for off-chain tracking
 
-#### Usage Tracking and Analytics
+#### Security Features
 
-The AgentNFT contract provides rich data for agent owners:
-- Total usage count per agent
-- Total revenue claimed for each token
-- Unclaimed revenue available per token
-- Historical usage through event logs
+- **Role-Based Access Control**: Only the registry contract can create agents and distribute revenue
+- **ReentrancyGuard**: Prevents reentrancy attacks during revenue claiming
+- **SafeERC20**: Uses OpenZeppelin's safe transfer methods for token operations
+- **Maximum Token Limit**: Prevents gas-limit issues by capping tokens per agent
 
 ### AgentRegistry Contract
 
@@ -90,16 +99,18 @@ The AgentRegistry contract serves as the central hub for creating and using agen
 
 Key features:
 - Agent creation with configurable properties
+- Fixed creation of exactly 12 NFTs per agent
 - Tiered access system (Basic, Advanced, Premium)
 - Usage tracking and fee collection
 - Revenue distribution to NFT holders
+- Owner controls over fee parameters
 
 #### Core Functions
 
 1. **createAgent**: The gateway for creators to mint new AI agents
    - Requires 25,000 NEOX tokens
    - Configures agent name, symbol, type, personality, and model settings
-   - Creates 1-12 NFTs representing ownership
+   - Creates exactly 12 NFTs representing ownership
    - Automatically grants creator Premium tier access
    - Returns the newly created agentId for reference
 
@@ -116,9 +127,17 @@ Key features:
    - Distributes revenue to NFT holders
    - Emits events for off-chain agent activation
 
-4. **getAgentDetails/getAgentConfig**: Query functions for retrieving agent metadata
-   - Returns all public agent information
-   - Provides personality and model settings for AI configuration
+4. **getAgentDetails**: Query function for retrieving complete agent metadata
+   - Returns all public agent information including personality and model settings
+   - Provides data needed for AI configuration
+
+5. **getCreatorAgents**: Retrieves all agents created by a specific address
+   - Useful for creator dashboards and portfolio management
+
+6. **Administrative Functions**: Owner-only functions to adjust fees and revenue distribution
+   - setFees: Update creation and usage fees
+   - setFeeDistribution: Adjust the percentage split between creators and platform
+   - withdrawFees: Allow platform owner to withdraw accumulated fees
 
 #### Agent Structure
 
@@ -138,13 +157,46 @@ struct Agent {
 }
 ```
 
-#### Creator Dashboard Features
+### NPMarketplace Contract
 
-The registry provides special functions for creators:
-- **getCreatorAgents**: Lists all agents created by an address
-- Auto-tracking of usage statistics
-- Access to detailed configuration data
-- Management of agent availability
+The NPMarketplace contract enables decentralized trading of Agent NFTs using NEOX tokens. It provides a secure platform for creators to monetize their agents and for users to acquire ownership stakes in popular agents.
+
+Key features:
+- List Agent NFTs for sale at custom prices
+- Purchase NFTs using NEOX tokens
+- Integrated marketplace fee structure (2%)
+- Secure NFT and token transfers
+- Complete listing management
+
+#### Core Functions
+
+1. **listNFT**: Lists an NFT for sale
+   - Verifies ownership of the NFT
+   - Checks for proper approval
+   - Creates active listing record
+   - Emits NFTListed event
+
+2. **purchaseNFT**: Allows users to buy listed NFTs
+   - Non-reentrant function for security
+   - Verifies buyer has sufficient NEOX tokens
+   - Automatically splits payment between seller and marketplace fee
+   - Transfers NFT to buyer
+   - Emits NFTPurchased event
+
+3. **delistNFT**: Allows sellers to remove NFTs from sale
+   - Verifies caller is the original seller
+   - Removes listing data
+   - Emits NFTDelisted event
+
+4. **getListing**: Query function to view current listing details
+   - Returns complete listing information
+
+#### Security Features
+
+- **ReentrancyGuard**: Prevents reentrancy attacks during purchases
+- **Ownership Verification**: Ensures only legitimate owners can list NFTs
+- **ERC721Receiver**: Properly handles direct NFT transfers to the contract
+- **Secure Token Transfers**: Verifies balance and allowance before transactions
 
 ## Key Features
 
@@ -152,20 +204,22 @@ The registry provides special functions for creators:
 
 1. **Agent Creation**: Create custom AI agents with unique personalities and capabilities
 2. **NFT Monetization**: Earn ongoing revenue from agent usage through NFT ownership
-3. **Fractional Ownership**: Create multiple NFTs (up to 12) for each agent to enable fractional ownership
+3. **Fractional Ownership**: Create 12 NFTs for each agent to enable fractional ownership
 4. **Automatic Revenue**: Automatically receive 70% of all fees related to your agents
+5. **Marketplace Integration**: Sell Agent NFTs through the integrated marketplace
 
 ### For Users
 
 1. **Tiered Access**: Purchase different tiers of access to agents based on usage needs
-   - **Basic**: Entry-level access with limited features
-   - **Advanced**: Enhanced access with more capabilities
-   - **Premium**: Full access to all agent features and capabilities
+   - **Basic**: Entry-level access with limited features (100 NEOX)
+   - **Advanced**: Enhanced access with more capabilities (500 NEOX)
+   - **Premium**: Full access to all agent features (2,000 NEOX)
 2. **Diverse Agent Types**: Access different types of specialized agents:
    - **Builder**: Focused on creation and development
    - **Researcher**: Specialized in information gathering and analysis
    - **Socialite**: Designed for communication and social interaction
 3. **Ownership Opportunity**: Purchase agent NFTs to earn passive income from other users
+4. **Secondary Market**: Buy and sell Agent NFTs through the decentralized marketplace
 
 ## Token Economics
 
@@ -176,6 +230,7 @@ The NEOX token is central to the Neo Pantheon ecosystem:
   - Creating new agents (25,000 NEOX)
   - Purchasing tier access (100-2,000 NEOX)
   - Using agents (10 NEOX per use)
+  - Trading Agent NFTs on the marketplace
   - Earning revenue as an NFT holder
 
 ## Getting Started
@@ -190,7 +245,6 @@ The NEOX token is central to the Neo Pantheon ecosystem:
    const agentType = 1; // Researcher
    const personality = "Professional, knowledgeable, and friendly financial advisor with expertise in investment strategies, retirement planning, and wealth management. Presents information in a clear, actionable manner with appropriate risk disclosures.";
    const modelConfig = "gpt-4-turbo, financial-focus, temperature=0.7, max_tokens=8192";
-   const nftCount = 5; // Create 5 NFTs
    const customURI = "https://api.neopantheon.io/metadata/financial-advisor";
    
    // Calculate creation fee (25,000 NEOX)
@@ -199,16 +253,16 @@ The NEOX token is central to the Neo Pantheon ecosystem:
    // Approve token spend
    await neoxToken.approve(agentRegistry.address, creationFee);
    
-   // Create agent
+   // Create agent (automatically creates 12 NFTs)
    const tx = await agentRegistry.createAgent(
-     name, symbol, agentType, personality, modelConfig, nftCount, customURI
+     name, symbol, agentType, personality, modelConfig, customURI
    );
    const receipt = await tx.wait();
    
    // Extract agentId from event logs
    const event = receipt.events.find(e => e.event === "AgentCreated");
    const agentId = event.args.agentId;
-   console.log(`Created agent #${agentId} with ${nftCount} NFTs`);
+   console.log(`Created agent #${agentId} with 12 NFTs`);
    ```
 
 2. **Check Your NFTs**:
@@ -266,20 +320,19 @@ The NEOX token is central to the Neo Pantheon ecosystem:
    }
    ```
 
-5. **Track Agent Usage**:
+5. **List NFTs on the Marketplace**:
    ```javascript
-   // Get agent usage statistics
-   const usageCount = await agentNFT.totalUsageCount(agentId);
-   console.log(`Agent #${agentId} has been used ${usageCount} times`);
+   // Set NFT approval for marketplace
+   await agentNFT.approve(marketplace.address, tokenId);
    
-   // Track usage events
-   const filter = agentNFT.filters.AgentUsed(agentId, null);
-   const events = await agentNFT.queryFilter(filter, -10000); // Last 10000 blocks
+   // Set price (e.g., 15,000 NEOX)
+   const price = ethers.utils.parseEther("15000");
    
-   console.log(`Recent usage events: ${events.length}`);
-   events.forEach((event, i) => {
-     console.log(`${i+1}. Used by: ${event.args.user} at block ${event.blockNumber}`);
-   });
+   // List NFT for sale
+   const tx = await marketplace.listNFT(agentNFT.address, tokenId, price);
+   await tx.wait();
+   
+   console.log(`Successfully listed token #${tokenId} for ${ethers.utils.formatEther(price)} NEOX`);
    ```
 
 ### For Users
@@ -315,21 +368,7 @@ The NEOX token is central to the Neo Pantheon ecosystem:
    console.table(recentAgents);
    ```
 
-2. **Check Current Tier Access**:
-   ```javascript
-   // Get your current tier for a specific agent
-   const userAddress = "0x..."; // Your address
-   const agentId = 42; // Agent ID
-   
-   const tier = await agentRegistry.userTiers(userAddress, agentId);
-   const tierName = tier == 0 ? "None" : 
-                   tier == 1 ? "Basic" :
-                   tier == 2 ? "Advanced" : "Premium";
-   
-   console.log(`Your current access tier for agent #${agentId}: ${tierName}`);
-   ```
-
-3. **Purchase Tier Access**:
+2. **Purchase Tier Access**:
    ```javascript
    // Get tier costs
    const basicCost = ethers.utils.parseEther("100");    // 100 NEOX
@@ -351,7 +390,7 @@ The NEOX token is central to the Neo Pantheon ecosystem:
    console.log(`Successfully purchased ${tierName} tier access to agent #${agentId}`);
    ```
 
-4. **Use an Agent**:
+3. **Use an Agent**:
    ```javascript
    // Calculate usage fee (10 NEOX)
    const usageFee = ethers.utils.parseEther("10");
@@ -383,30 +422,38 @@ The NEOX token is central to the Neo Pantheon ecosystem:
    console.log(`Connected to agent with session ID: ${sessionId}`);
    ```
 
-5. **Buy an Agent NFT** (through secondary market):
+4. **Buy an Agent NFT from the Marketplace**:
    ```javascript
-   // This example assumes a marketplace integration
-
-   // 1. Find available NFTs for a specific agent
+   // Get marketplace listings for a specific agent
    const agentId = 42;
    const tokens = await agentNFT.getAgentTokens(agentId);
    
-   console.log(`Agent #${agentId} has ${tokens.length} NFTs in circulation`);
-   
-   // 2. Check ownership and marketplace listings
-   // (integration with marketplaces like OpenSea, Rarible, etc.)
-   
-   // 3. After purchase, check revenue for your new NFT
-   const myTokenId = 123; // ID of the token you purchased
-   const unclaimed = await agentNFT.unclaimedRevenue(myTokenId);
-   console.log(`Your new NFT has ${ethers.utils.formatEther(unclaimed)} NEOX in unclaimed revenue`);
-   
-   // 4. Claim available revenue
-   if (unclaimed.gt(0)) {
-     const tx = await agentNFT.claimRevenue(myTokenId);
-     await tx.wait();
-     console.log(`Successfully claimed ${ethers.utils.formatEther(unclaimed)} NEOX`);
+   // Check for active listings
+   for (const tokenId of tokens) {
+     try {
+       const listing = await marketplace.getListing(agentNFT.address, tokenId);
+       
+       if (listing.isActive) {
+         console.log(`Token #${tokenId} is listed for ${ethers.utils.formatEther(listing.price)} NEOX`);
+         console.log(`Seller: ${listing.seller}`);
+       }
+     } catch (error) {
+       console.log(`Error checking listing for token #${tokenId}: ${error.message}`);
+     }
    }
+   
+   // Purchase a listed NFT
+   const tokenToBuy = 123; // Token ID you want to buy
+   const listing = await marketplace.getListing(agentNFT.address, tokenToBuy);
+   
+   // Approve NEOX tokens for the purchase
+   await neoxToken.approve(marketplace.address, listing.price);
+   
+   // Buy the NFT
+   const tx = await marketplace.purchaseNFT(agentNFT.address, tokenToBuy);
+   await tx.wait();
+   
+   console.log(`Successfully purchased token #${tokenToBuy} for ${ethers.utils.formatEther(listing.price)} NEOX`);
    ```
 
 ## Technical Implementation
@@ -415,7 +462,7 @@ The NEOX token is central to the Neo Pantheon ecosystem:
 
 1. Creator pays 25,000 NEOX to create an agent
 2. Agent metadata is stored in the registry
-3. NFTs (1-12) are minted to the creator
+3. Exactly 12 NFTs are minted to the creator
 4. Creator automatically receives Premium tier access
 
 ### Revenue Flow
@@ -443,46 +490,16 @@ The NEOX token is central to the Neo Pantheon ecosystem:
 │    Creator    │◄──────────►│     User      │◄───────────►│  NFT Holder   │
 │               │            │               │             │               │
 └───────────────┘            └───────────────┘             └───────────────┘
+                                                                  ▲
+                                                                  │
+                                                                  │
+                                                                  ▼
+                                                          ┌───────────────┐
+                                                          │               │
+                                                          │ NPMarketplace │
+                                                          │               │
+                                                          └───────────────┘
 ```
-
-### Example Workflow: Agent Creation and Usage
-
-1. **Creation Flow**:
-   ```
-   Creator -> approves NEOX spend -> AgentRegistry.createAgent() ->
-     -> AgentRegistry creates agent record
-     -> AgentRegistry calls AgentNFT.createAgent() multiple times
-     -> AgentNFT mints tokens to Creator
-     -> AgentRegistry grants Creator premium tier
-   ```
-
-2. **User Access Flow**:
-   ```
-   User -> approves NEOX spend -> AgentRegistry.purchaseTier() ->
-     -> AgentRegistry transfers NEOX tokens
-     -> AgentRegistry calls AgentNFT.distributeRevenue()
-     -> AgentNFT updates unclaimedRevenue for all tokens
-     -> AgentRegistry grants User tier access
-   ```
-
-3. **Usage Flow**:
-   ```
-   User -> approves NEOX spend -> AgentRegistry.useAgent() ->
-     -> AgentRegistry verifies tier access
-     -> AgentRegistry transfers NEOX tokens
-     -> AgentRegistry calls AgentNFT.recordUsage()
-     -> AgentRegistry calls AgentNFT.distributeRevenue()
-     -> AgentNFT updates unclaimedRevenue for all tokens
-     -> Off-chain systems activate AI agent for user
-   ```
-
-4. **Revenue Claim Flow**:
-   ```
-   NFT Holder -> AgentNFT.claimRevenue() ->
-     -> AgentNFT verifies token ownership
-     -> AgentNFT transfers NEOX tokens to holder
-     -> AgentNFT updates tracking metrics
-   ```
 
 ### Agent Types
 
@@ -509,61 +526,7 @@ The protocol supports three types of specialized agents:
 | Advanced Tier | 500 NEOX | 70% to creators, 30% to platform |
 | Premium Tier | 2,000 NEOX | 70% to creators, 30% to platform |
 | Agent Usage | 10 NEOX per use | 70% to creators, 30% to platform |
-
-### AgentNFT Distribution Mechanism
-
-The AgentNFT contract implements a sophisticated revenue distribution mechanism that ensures fair and transparent revenue sharing:
-
-```solidity
-function distributeRevenue(uint256 agentId, uint256 amount) external {
-    require(msg.sender == registry || msg.sender == owner(), "Unauthorized");
-    require(amount > 0, "Zero amount");
-    
-    uint256[] storage tokens = agentTokens[agentId];
-    require(tokens.length > 0, "No tokens for agent");
-    
-    uint256 amountPerToken = amount / tokens.length;
-    require(amountPerToken > 0, "Amount too small");
-    
-    for (uint256 i = 0; i < tokens.length; i++) {
-        unclaimedRevenue[tokens[i]] += amountPerToken;
-    }
-    
-    emit RevenueDistributed(agentId, amount);
-}
-```
-
-This function is called automatically when:
-1. A user purchases tier access to an agent
-2. A user calls the `useAgent` function to interact with an agent
-
-The total revenue is split equally among all NFT tokens for that agent, ensuring proportional distribution based on ownership share. For example, if an agent has 5 NFTs and generates 700 NEOX in creator revenue, each NFT would receive 140 NEOX.
-
-### Revenue Claiming Process
-
-NFT owners must manually claim their revenue using the `claimRevenue` function:
-
-```solidity
-function claimRevenue(uint256 tokenId) external {
-    require(ownerOf(tokenId) == msg.sender, "Not token owner");
-    require(unclaimedRevenue[tokenId] > 0, "No revenue to claim");
-    
-    uint256 amount = unclaimedRevenue[tokenId];
-    unclaimedRevenue[tokenId] = 0;
-    totalRevenueClaimed[tokenId] += amount;
-    
-    neoxToken.transfer(msg.sender, amount);
-    
-    emit RevenueClaimed(tokenId, msg.sender, amount);
-}
-```
-
-This function:
-1. Verifies the caller is the legitimate NFT owner
-2. Checks if there is unclaimed revenue available
-3. Updates internal accounting records
-4. Transfers NEOX tokens directly to the owner's wallet
-5. Emits an event for transparency and tracking
+| NFT Marketplace Sale | Sale Price | 98% to seller, 2% to platform |
 
 ## Revenue Distribution
 
@@ -572,10 +535,32 @@ When fees are collected from tier purchases and agent usage:
 1. 70% is distributed equally among all NFT holders of that agent
 2. 30% goes to the platform treasury
 3. NFT holders must manually claim their revenue
+4. Remainder tokens from uneven divisions go to the first token
 
-For example, if an agent has 5 NFTs and generates 1,000 NEOX in usage fees:
-- 700 NEOX (70%) is distributed to NFT holders (140 NEOX each)
+For example, if an agent has 12 NFTs and generates 1,000 NEOX in usage fees:
+- 700 NEOX (70%) is distributed to NFT holders (58.33 NEOX each, with 0.04 NEOX remainder to first token)
 - 300 NEOX (30%) goes to the platform
+
+## Marketplace
+
+The integrated NFT marketplace allows for secure trading of Agent NFTs:
+
+1. **Listing Process**:
+   - Seller approves the marketplace contract to handle their NFT
+   - Seller lists the NFT with a desired price in NEOX tokens
+   - Listing is published on-chain and available to all users
+
+2. **Purchase Process**:
+   - Buyer approves NEOX token spending
+   - Buyer purchases the NFT through marketplace contract
+   - 98% of payment goes to seller, 2% to marketplace fee
+   - NFT is automatically transferred to buyer
+
+3. **Benefits**:
+   - Secure escrow mechanism
+   - Transparent fee structure
+   - Automated revenue distribution
+   - Direct integration with Agent usage system
 
 ## Roadmap
 
